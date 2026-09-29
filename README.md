@@ -1,57 +1,63 @@
 # KeeperCam 🧤 — стань вратарём перед веб-камерой
 
-**KeeperCam** — браузерная игра про вратаря: игрок отбивает мячи движениями тела, а AI-тренер объясняет, как улучшить технику. Собран локально запускаемый MVP: от запуска камеры и обучения до матча из 10 ударов, итогового счёта и таблицы рекордов.
+**KeeperCam** — браузерная игра, где ты отбиваешь мячи движениями тела. Камера показывает скелет и распознаёт пять движений, а тренер замечает ошибки техники и подсказывает конкретное исправление. Сценарий: подготовка камеры → калибровка → короткое обучение → 10 ударов → разбор матча.
 
 ![KeeperCam desktop preview](docs/design-desktop.png)
 
-Интерфейс ведёт игрока через подготовку камеры, калибровку, короткое обучение и матч. На главной можно переключить схему «стойка / сейв / ошибка» ещё до включения камеры. Во время игры большая область отведена видео, а текущая подсказка тренера, движение и счёт видны рядом. Экран результатов позволяет разобрать каждый из десяти ударов.
-
-[Mobile preview](docs/design-mobile.png)
-
-## What it is
-
-KeeperCam is a browser goalkeeper game controlled by your body. Pose recognition runs locally in the browser; video frames are not uploaded. Track: Game (with coaching).
+[Mobile preview](docs/design-mobile.png) · [Сценарий видео и подготовка к публикации](docs/DEMO_AND_RELEASE.md)
 
 ## What is implemented
 
-- Camera permission flow with specific recovery messages.
-- MediaPipe Pose Landmarker Lite, with GPU to CPU fallback.
-- Mirrored camera view and a live 33-landmark skeleton overlay.
-- Model and WebAssembly runtime are self-hosted under `public/`.
-- Three-second body calibration and One Euro smoothing for landmark movement.
-- Five live rule-based movement meters; press `D` to show feature values and FPS.
-- A short tutorial that asks the player to trigger the one-hand error coach.
-- Ten-shot game loop, target zones, scoring, reaction timing, results and local leaderboard.
-- Russian technique hints with highlighted joints, optional speech, and synthesized game sounds.
-- Ten-shot match with four target zones, reaction scoring, streaks, per-shot technique notes, and a results timeline.
-- Calibration, five-move tutorial, and a deliberate one-hand mistake demonstration.
-- Results summary with frequent coaching mistakes and a local top-10 leaderboard.
-- Pauses the game when the tab is hidden and reinitializes pose tracking when the player returns.
-- Shows a low-performance notice if tracking remains below 12 FPS for 3 seconds.
-- Requires WebGL 2 for frame processing; falls back from GPU inference to CPU when WebGL remains available.
+- Зеркальное видео со скелетом и пятью живыми индикаторами движений.
+- Трёхсекундная калибровка под рост и пропорции игрока.
+- Обучение с намеренной ошибкой: поднять одну руку вместо двух, увидеть подсказку и исправиться.
+- Матч из десяти ударов с подсветкой зоны, счётом, серией сейвов и разбором каждого удара.
+- Результаты: очки, доля чистых сейвов, реакция, три частые ошибки и локальная таблица рекордов.
+- Синтезированные звуки, необязательный голос тренера и интерфейс для телефона.
 
 ## Movements
 
-| Movement | What the detector checks |
-|---|---|
-| READY / Стойка | Bent knees, stance wider than shoulders, hands between shoulders and hips, centered body |
-| DIVE_LEFT / Бросок влево | Body center shifts left and a wrist reaches left beyond the calibrated shoulder width |
-| DIVE_RIGHT / Бросок вправо | Body center shifts right and a wrist reaches right beyond the calibrated shoulder width |
-| HIGH / Верхний мяч | Both wrists rise above the head and both elbows extend |
-| LOW / Нижний мяч | Hips lower relative to calibration and both wrists move below the hips |
+| Movement | Action | How we detect it |
+|---|---|---|
+| READY / Стойка | Подготовиться к удару | Согнутые колени, стопы шире плеч, руки перед корпусом, тело в центре |
+| DIVE_LEFT / Влево | Отбить мяч слева | Центр тела смещается влево, рука тянется дальше ширины плеч |
+| DIVE_RIGHT / Вправо | Отбить мяч справа | Центр тела смещается вправо, рука тянется дальше ширины плеч |
+| HIGH / Верхний мяч | Взять мяч сверху | Обе руки выше головы, локти выпрямлены |
+| LOW / Нижний мяч | Взять мяч снизу | Таз опускается, обе руки ниже таза |
 
-Movement thresholds are grouped in `src/config.ts`. Each meter uses a progress score; a move event requires the rule to remain true for 150 ms and releases below 60% progress.
+Пороговые значения собраны в [`src/config.ts`](src/config.ts). Условия движения должны держаться 150 мс; повторное подтверждение возможно после выхода из позы. Расстояния нормализуются по ширине плеч и длине корпуса, которые приложение измеряет при калибровке.
 
-For troubleshooting, append `?delegate=cpu` to the local URL to select the CPU inference delegate directly (WebGL 2 is still required by MediaPipe’s video processing graph).
+## Error coach
+
+Тренер проверяет правила для каждого кадра и показывает одну самую важную подсказку после 300 мс устойчивой ошибки. В скелете выделяются нужные суставы, а стрелка показывает направление исправления. Одинаковое сообщение не повторяется чаще, чем раз в 3,5 с. Голос можно включить отдельно.
+
+| Phase | Example error | Correction shown to the player |
+|---|---|---|
+| Кадр | Не видны стопы или плечи | Отойти назад или встать по центру |
+| Кадр | Недостаточная видимость суставов | Повернуться лицом к свету |
+| Стойка | Прямые колени, узкая стойка, руки внизу | Согнуть колени, расставить стопы, поднять руки |
+| Стойка | Тело сместилось от центра | Вернуться в центр ворот |
+| Сейв в сторону | Тянется только рука | Шагнуть к мячу всем телом |
+| Верхний мяч | Поднята одна рука или согнуты локти | Поднять обе руки и выпрямить их |
+| Нижний мяч | Руки внизу, но таз не опущен | Согнуть колени и присесть ниже |
+| Любой удар | Движение в неверную зону | Смотреть на подсветку и двигаться к мячу |
+
+Удар с ошибкой приносит 100 очков, чистый сейв — 150 плюс бонус за реакцию. Ошибки сохраняются в итогах матча. В обучении игрок специально поднимает одну руку для верхнего мяча, чтобы увидеть, как работает этот режим.
+
+## How it works
+
+Камера → MediaPipe Pose Landmarker Lite (33 точки тела) → One Euro сглаживание → калибровка → геометрические правила → подтверждение движения → логика матча → экран, звук и подсказки.
+
+Распознавание выполняется в браузере: кадры не отправляются на сервер. Модель и WebAssembly находятся в `public/`. Сначала используется GPU, при ошибке приложение переключается на CPU. Для видеографа MediaPipe нужен WebGL 2 и в режиме CPU. Для диагностики можно открыть локальный адрес с `?delegate=cpu`. Клавиша `D` показывает FPS и значения признаков.
 
 ## Run locally
 
 ```sh
-npm install
+npm ci
 npm run dev
 ```
 
-Open the localhost URL printed by Vite and allow camera access. Camera APIs require HTTPS or localhost.
+Открой локальный адрес, который напечатает Vite, и разреши камеру. Для камеры нужен `localhost` или HTTPS. Устройство должно видеть голову и стопы; для боковых движений нужно немного свободного места.
 
 ## Build
 
@@ -60,20 +66,25 @@ npm run build
 npm run preview
 ```
 
-The static production output is written to `dist/`. It can be deployed to Vercel or Netlify when a public demo link is needed.
+Статический сайт собирается в `dist/`. Ссылки на опубликованную игру и видео добавляются после загрузки проекта; порядок публикации и сценарий ролика записаны в [DEMO_AND_RELEASE.md](docs/DEMO_AND_RELEASE.md).
 
-## Recognition pipeline
+## Project structure
 
-Camera → MediaPipe Pose Landmarker (33 landmarks, local inference) → One Euro smoothing → mirrored screen coordinates → body calibration → geometric movement rules → live meters and canvas skeleton overlay.
-
-## Error coach
-
-The coach evaluates framing, goalkeeper stance, and save technique rules each frame. It waits 300 ms before showing the highest-priority hint, highlights the relevant joints, and can speak the hint in Russian. The tutorial includes a deliberate one-hand high-save attempt so the player can see the coach catch a mistake.
+| Path | Purpose |
+|---|---|
+| `src/main.ts` | Запуск камеры, переходы между этапами, связка игры и интерфейса |
+| `src/config.ts` | Пороги распознавания и длительность этапов |
+| `src/vision/` | Камера, модель, сглаживание, признаки и калибровка |
+| `src/logic/` | Правила движений, тренер и логика матча |
+| `src/ui/` | Отрисовка скелета, экраны, иллюстрации и результаты |
+| `src/audio/` | Игровые звуки через Web Audio |
+| `src/storage/` | Локальная таблица рекордов |
+| `public/` | Файлы модели, WebAssembly, шрифты и значок |
 
 ## Borrowed work
 
-- Vite TypeScript template (project scaffold).
-- `@mediapipe/tasks-vision` and the official MediaPipe Pose Landmarker Lite model.
-- MediaPipe WASM runtime files distributed with `@mediapipe/tasks-vision`.
+- Vite и TypeScript используются для сборки; приложение и интерфейс написаны в этом репозитории.
+- `@mediapipe/tasks-vision`, официальная модель Pose Landmarker Lite и её WebAssembly runtime используются для определения точек тела.
+- Самостоятельно размещённые шрифты Archivo и IBM Plex Mono используются в интерфейсе.
 
-Game, recognition-rule, and coaching logic are implemented in this repository.
+Правила распознавания движений, тренер, счёт и логика матча написаны для KeeperCam в ходе проекта.
