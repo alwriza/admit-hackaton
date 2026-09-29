@@ -62,7 +62,7 @@ export class Calibration {
   private startedAt?: number;
   add(pose: Landmark[]): BodyCalibration | undefined {
     const needed = [0,11,12,23,24,25,26,27,28];
-    if (!visiblePose(pose, needed)) return undefined;
+    if (!visiblePose(pose, needed)) { this.reset(); return undefined; }
     const point = (i: number) => ({ x: pose[i].x, y: pose[i].y });
     const sl = point(11), sr = point(12), hl = point(23), hr = point(24);
     const shoulder = midpoint(sl, sr), hip = midpoint(hl, hr);
@@ -75,5 +75,6 @@ export class Calibration {
     const vals = keys.map((key) => median(this.frames.map((f) => key.startsWith('c0.') ? f.c0[key.slice(3) as 'x'|'y'] : f[key as 'hipY0'|'noseY0'|'sw'|'tl'])));
     return { c0: { x: vals[0], y: vals[1] }, hipY0: vals[2], noseY0: vals[3], sw: vals[4], tl: vals[5] };
   }
+  progress(now = performance.now()): number { return this.startedAt === undefined ? 0 : Math.min(1, (now - this.startedAt) / CONFIG.calibrationMs); }
   reset(): void { this.frames = []; this.startedAt = undefined; }
 }

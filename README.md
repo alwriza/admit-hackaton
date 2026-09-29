@@ -1,12 +1,18 @@
 # KeeperCam 🧤 — стань вратарём перед веб-камерой
 
-**KeeperCam** — браузерная игра про вратаря: игрок отбивает мячи движениями тела, а AI-тренер объясняет, как улучшить технику. Сейчас готов первый этап прототипа: запуск камеры, локальное распознавание позы и визуализация скелета.
+**KeeperCam** — браузерная игра про вратаря: игрок отбивает мячи движениями тела, а AI-тренер объясняет, как улучшить технику. Собран локально запускаемый MVP: от запуска камеры и обучения до матча из 10 ударов, итогового счёта и таблицы рекордов.
+
+![KeeperCam desktop preview](docs/design-desktop.png)
+
+Интерфейс ведёт игрока через подготовку камеры, калибровку, короткое обучение и матч. На главной можно переключить схему «стойка / сейв / ошибка» ещё до включения камеры. Во время игры большая область отведена видео, а текущая подсказка тренера, движение и счёт видны рядом. Экран результатов позволяет разобрать каждый из десяти ударов.
+
+[Mobile preview](docs/design-mobile.png)
 
 ## What it is
 
 KeeperCam is a browser goalkeeper game controlled by your body. Pose recognition runs locally in the browser; video frames are not uploaded. Track: Game (with coaching).
 
-## Current prototype
+## What is implemented
 
 - Camera permission flow with specific recovery messages.
 - MediaPipe Pose Landmarker Lite, with GPU to CPU fallback.
@@ -17,6 +23,9 @@ KeeperCam is a browser goalkeeper game controlled by your body. Pose recognition
 - A short tutorial that asks the player to trigger the one-hand error coach.
 - Ten-shot game loop, target zones, scoring, reaction timing, results and local leaderboard.
 - Russian technique hints with highlighted joints, optional speech, and synthesized game sounds.
+- Ten-shot match with four target zones, reaction scoring, streaks, per-shot technique notes, and a results timeline.
+- Calibration, five-move tutorial, and a deliberate one-hand mistake demonstration.
+- Results summary with frequent coaching mistakes and a local top-10 leaderboard.
 - Pauses the game when the tab is hidden and reinitializes pose tracking when the player returns.
 - Shows a low-performance notice if tracking remains below 12 FPS for 3 seconds.
 - Requires WebGL 2 for frame processing; falls back from GPU inference to CPU when WebGL remains available.
@@ -51,7 +60,7 @@ npm run build
 npm run preview
 ```
 
-The static production output is written to `dist/` and can be deployed to Vercel or Netlify.
+The static production output is written to `dist/`. It can be deployed to Vercel or Netlify when a public demo link is needed.
 
 ## Recognition pipeline
 
