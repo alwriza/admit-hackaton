@@ -17,6 +17,8 @@ KeeperCam is a browser goalkeeper game controlled by your body. Pose recognition
 - A short tutorial that asks the player to trigger the one-hand error coach.
 - Ten-shot game loop, target zones, scoring, reaction timing, results and local leaderboard.
 - Russian technique hints with highlighted joints, optional speech, and synthesized game sounds.
+- Pauses the game when the tab is hidden and reinitializes pose tracking when the player returns.
+- Shows a low-performance notice if tracking remains below 12 FPS for 3 seconds.
 
 ## Movements
 
@@ -62,4 +64,4 @@ The coach evaluates framing, goalkeeper stance, and save technique rules each fr
 - `@mediapipe/tasks-vision` and the official MediaPipe Pose Landmarker Lite model.
 - MediaPipe WASM runtime files distributed with `@mediapipe/tasks-vision`.
 
-Game, recognition-rule, and coaching logic will be developed in this repository.
+Game, recognition-rule, and coaching logic are implemented in this repository.

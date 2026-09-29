@@ -9,6 +9,7 @@ import { GoalkeeperGame, type GameZone } from './logic/game';
 import { CoachController, evaluateCoach, type CoachPhase } from './logic/coach';
 import { getLeaderboard, saveScore } from './storage/leaderboard';
 import { SoundEffects } from './audio/sfx';
+import { CONFIG } from './config';
 
 const app = document.querySelector<HTMLDivElement>('#app')!;
 
@@ -53,6 +54,10 @@ const debug = document.createElement('pre');
 debug.className = 'debug-overlay hidden';
 debug.textContent = 'DEBUG · D';
 stageWrap.append(debug);
+const performanceNotice = document.createElement('div');
+performanceNotice.className = 'performance-notice hidden';
+performanceNotice.textContent = 'Слабая производительность — закрой другие вкладки';
+stageWrap.append(performanceNotice);
 const calibrationState = meterPanel.querySelector<HTMLElement>('#calibration-state')!;
 const gameButton = document.createElement('button');
 gameButton.className = 'game-start';
@@ -105,6 +110,11 @@ let previousGamePhase = 'idle';
 const zoneNames: Record<GameZone, string> = { DIVE_LEFT: 'ВЛЕВО', DIVE_RIGHT: 'ВПРАВО', HIGH: 'ВЕРХНИЙ МЯЧ', LOW: 'НИЖНИЙ МЯЧ' };
 let engine: PoseEngine | undefined;
 let running = false;
+let frameLoop: (() => void) | undefined;
+let loopGeneration = 0;
+let reinitializing = false;
+let fpsFrames = 0;
+let fpsWindowStarted = performance.now();
 
 function setError(error: unknown) {
   const name = error instanceof DOMException ? error.name : '';
@@ -138,8 +148,18 @@ async function boot() {
     modal.classList.add('hidden');
     status.textContent = 'Встань в полный рост в кадре';
     cameraState.textContent = 'СИСТЕМА ГОТОВА';
-    const loop = () => {
-      if (!running || !engine) return;
+    const scheduleLoop = () => {
+      const generation = ++loopGeneration;
+      const loop = () => {
+      if (generation !== loopGeneration || !running || !engine) return;
+      fpsFrames++;
+      const fpsElapsed = performance.now() - fpsWindowStarted;
+      if (fpsElapsed >= CONFIG.performance.fpsWarningAfterMs) {
+        const fps = fpsFrames * 1000 / fpsElapsed;
+        performanceNotice.classList.toggle('hidden', fps >= CONFIG.performance.fpsWarningBelow);
+        fpsFrames = 0;
+        fpsWindowStarted = performance.now();
+      }
       const pose = engine.detect(video);
       drawStage(video, canvas, pose, coach.hint()?.joints);
       const detected = Boolean(pose?.length);
@@ -262,8 +282,11 @@ async function boot() {
       if (detected && !bodyBase) status.textContent = 'Встань ровно на 3 секунды для калибровки';
       else if (detected && !(status.textContent ?? '').startsWith('Распознано')) status.textContent = 'Двигайся — ИИ отслеживает пять поз';
       requestAnimationFrame(loop);
+      };
+      requestAnimationFrame(loop);
     };
-    requestAnimationFrame(loop);
+    frameLoop = scheduleLoop;
+    scheduleLoop();
   } catch (error) {
     stageWrap.classList.remove('is-loading', 'is-live');
     stopCamera(video);
@@ -280,4 +303,31 @@ let lastFrame = performance.now();
 window.addEventListener('keydown', (event) => { if (event.key.toLowerCase() === 'd' && !event.repeat) debug.classList.toggle('hidden'); });
 retry.addEventListener('click', boot);
 document.querySelector('#close-modal')!.addEventListener('click', () => modal.classList.add('hidden'));
-window.addEventListener('pagehide', () => { running = false; engine?.close(); stopCamera(video); });
+document.addEventListener('visibilitychange', async () => {
+  if (document.hidden) {
+    if (running) { running = false; loopGeneration++; game.pause(performance.now()); window.speechSynthesis?.cancel(); status.textContent = 'Пауза — вернись на вкладку, чтобы продолжить'; }
+    return;
+  }
+  if (!engine || running || reinitializing) return;
+  reinitializing = true;
+  try {
+    const stream = video.srcObject;
+    const hasLiveCamera = stream instanceof MediaStream && stream.getVideoTracks().some((track) => track.readyState === 'live');
+    if (!hasLiveCamera) { stopCamera(video); await startCamera(video); }
+    else await video.play();
+    engine.close();
+    engine = await PoseEngine.create();
+    moveTracker.reset();
+    game.resume(performance.now());
+    fpsFrames = 0; fpsWindowStarted = performance.now();
+    running = true;
+    cameraState.textContent = 'СИСТЕМА ГОТОВА';
+    status.textContent = 'Распознавание восстановлено';
+    frameLoop?.();
+  } catch (error) {
+    running = false;
+    setError(error);
+    cameraState.textContent = 'ОЖИДАНИЕ';
+  } finally { reinitializing = false; }
+});
+window.addEventListener('pagehide', () => { running = false; loopGeneration++; engine?.close(); stopCamera(video); window.speechSynthesis?.cancel(); });

@@ -6,7 +6,8 @@ export class MoveTracker {
   private startedAt = 0;
   private confirmed = new Set<MoveId>();
   update(readings: Record<MoveId, MoveReading>, now: number): MoveId[] {
-    if (this.active && readings[this.active].progress < CONFIG.releaseProgress) {
+    const alternative = this.active && !readings[this.active].ok ? MOVE_IDS.find((id) => id !== this.active && readings[id].ok) : undefined;
+    if (this.active && (readings[this.active].progress < CONFIG.releaseProgress || alternative)) {
       this.active = undefined;
       this.startedAt = 0;
     }
