@@ -47,7 +47,7 @@ function setFlowStep(step: number) { flowStepper.classList.remove('hidden'); flo
 const labels = ['Стойка', 'Влево', 'Вправо', 'Верхний мяч', 'Нижний мяч'];
 const ids = [...MOVE_IDS];
 const meterPanel = document.createElement('div');
-meterPanel.className = 'live-meters';
+meterPanel.className = 'live-meters hidden';
 meterPanel.innerHTML = `<div class="meters-head"><span>РАСПОЗНАВАНИЕ ДВИЖЕНИЙ</span><span id="calibration-state">КАЛИБРОВКА · 3 СЕК</span></div>${ids.map((id, i) => `<div class="meter-row"><span>${labels[i]}</span><div class="meter-track"><i data-meter="${id}"></i></div></div>`).join('')}`;
 stageWrap.insertAdjacentElement('afterend', meterPanel);
 const debug = document.createElement('pre');
@@ -64,7 +64,7 @@ gameButton.className = 'game-start';
 gameButton.textContent = 'Сыграть 10 ударов';
 gameButton.disabled = true;
 meterPanel.append(gameButton);
-stageWrap.insertAdjacentHTML('beforeend', '<div class="goal-layer" id="goal-layer"><i data-zone="DIVE_LEFT"></i><i data-zone="DIVE_RIGHT"></i><i data-zone="HIGH"></i><i data-zone="LOW"></i></div><div class="game-hud hidden" id="game-hud"><span class="shot-count" id="shot-count"></span><span class="target-label" id="target-label"></span><span class="flying-ball" id="flying-ball">⚽</span><span class="verdict-label" id="verdict-label"></span></div>');
+stageWrap.insertAdjacentHTML('beforeend', '<div class="goal-layer hidden" id="goal-layer"><i data-zone="DIVE_LEFT"></i><i data-zone="DIVE_RIGHT"></i><i data-zone="HIGH"></i><i data-zone="LOW"></i></div><div class="game-hud hidden" id="game-hud"><span class="shot-count" id="shot-count"></span><span class="target-label" id="target-label"></span><span class="flying-ball" id="flying-ball">⚽</span><span class="verdict-label" id="verdict-label"></span></div>');
 const gameHud = stageWrap.querySelector<HTMLElement>('#game-hud')!;
 const shotCount = stageWrap.querySelector<HTMLElement>('#shot-count')!;
 const targetLabel = stageWrap.querySelector<HTMLElement>('#target-label')!;
@@ -93,6 +93,7 @@ const tutorialMoves = [
 let tutorialIndex = -1;
 const coachCard = document.createElement('div');
 coachCard.className = 'coach-card';
+coachCard.classList.add('hidden');
 coachCard.innerHTML = '<div class="coach-head"><span>ИИ-ТРЕНЕР</span><button type="button" id="voice-toggle">ГОЛОС · ВЫКЛ</button></div><div class="coach-body"><span class="coach-alert">✳</span><span id="coach-message">Встань в кадр — проверю технику</span><b id="coach-arrow"></b></div>';
 meterPanel.insertAdjacentElement('afterend', coachCard);
 const coachMessage = coachCard.querySelector<HTMLElement>('#coach-message')!;
@@ -118,8 +119,9 @@ let fpsWindowStarted = performance.now();
 
 function setError(error: unknown) {
   const name = error instanceof DOMException ? error.name : '';
-  modalTitle.textContent = name === 'NotAllowedError' ? 'Разреши доступ к камере' : name === 'NotFoundError' ? 'Камера не найдена' : !window.isSecureContext ? 'Нужна защищённая ссылка' : 'Не удалось запустить камеру';
-  modalCopy.textContent = name === 'NotAllowedError' ? 'Нажми на значок камеры рядом с адресом сайта и разреши доступ, затем попробуй ещё раз.' : name === 'NotFoundError' ? 'Подключи веб-камеру и повтори попытку.' : !window.isSecureContext ? 'Открой KeeperCam по HTTPS-ссылке или через localhost.' : 'Проверь, что камера не занята другим приложением, и попробуй ещё раз.';
+  const noWebgl = error instanceof Error && error.message === 'WebGL2 required';
+  modalTitle.textContent = noWebgl ? 'Включи WebGL 2' : name === 'NotAllowedError' ? 'Разреши доступ к камере' : name === 'NotFoundError' ? 'Камера не найдена' : !window.isSecureContext ? 'Нужна защищённая ссылка' : 'Не удалось запустить камеру';
+  modalCopy.textContent = noWebgl ? 'Этому браузеру нужен WebGL 2 для обработки изображения. Включи аппаратное ускорение в настройках браузера и перезапусти страницу.' : name === 'NotAllowedError' ? 'Нажми на значок камеры рядом с адресом сайта и разреши доступ, затем попробуй ещё раз.' : name === 'NotFoundError' ? 'Подключи веб-камеру и повтори попытку.' : !window.isSecureContext ? 'Открой KeeperCam по HTTPS-ссылке или через localhost.' : 'Проверь, что камера не занята другим приложением, и попробуй ещё раз.';
   loading.classList.add('hidden');
   retry.classList.remove('hidden');
   retry.textContent = 'Попробовать снова';
@@ -143,6 +145,8 @@ async function boot() {
     engine = await PoseEngine.create();
     running = true;
     setFlowStep(2);
+    meterPanel.classList.remove('hidden');
+    coachCard.classList.remove('hidden');
     stageWrap.classList.remove('is-loading');
     stageWrap.classList.add('is-live');
     modal.classList.add('hidden');
@@ -161,6 +165,17 @@ async function boot() {
         fpsWindowStarted = performance.now();
       }
       const pose = engine.detect(video);
+      if (engine.isRecovering) { cameraState.textContent = 'ПЕРЕКЛЮЧАЕМСЯ НА CPU'; status.textContent = 'Включаем резервный режим распознавания…'; }
+      const modelFailure = engine.consumeFailure();
+      if (modelFailure) {
+        running = false;
+        stopCamera(video);
+        console.error('Pose inference failed after GPU/CPU fallback', modelFailure);
+        setError(modelFailure);
+        cameraState.textContent = 'ОЖИДАНИЕ';
+        return;
+      }
+      if (!engine.isRecovering && cameraState.textContent === 'ПЕРЕКЛЮЧАЕМСЯ НА CPU') cameraState.textContent = 'СИСТЕМА ГОТОВА · CPU';
       drawStage(video, canvas, pose, coach.hint()?.joints);
       const detected = Boolean(pose?.length);
       poseBadge.classList.toggle('detected', detected);
@@ -237,6 +252,7 @@ async function boot() {
           } else if (!hint) spokenHintId = '';
           if (snapshot.phase !== 'idle') {
             gameHud.classList.remove('hidden');
+            goalLayer.classList.remove('hidden');
             shotCount.textContent = `УДАР ${Math.min(snapshot.shot, 10)} / 10   ·   ${snapshot.score} ОЧКОВ`;
             targetLabel.textContent = snapshot.zone ? (snapshot.phase === 'telegraph' ? `ГОТОВЬСЯ · ${zoneNames[snapshot.zone]}` : zoneNames[snapshot.zone]) : 'ВЕРНИСЬ В СТОЙКУ';
             targetLabel.classList.toggle('target-pulse', snapshot.phase === 'telegraph');
@@ -253,6 +269,7 @@ async function boot() {
               resultsShown = true;
               setFlowStep(5);
               gameHud.classList.add('hidden');
+              goalLayer.classList.add('hidden');
               goalLayer.classList.remove('active');
               const saves = snapshot.results.filter((item) => item.result !== 'goal').length;
               const cleanCount = snapshot.results.filter((item) => item.result === 'clean').length;

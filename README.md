@@ -19,6 +19,7 @@ KeeperCam is a browser goalkeeper game controlled by your body. Pose recognition
 - Russian technique hints with highlighted joints, optional speech, and synthesized game sounds.
 - Pauses the game when the tab is hidden and reinitializes pose tracking when the player returns.
 - Shows a low-performance notice if tracking remains below 12 FPS for 3 seconds.
+- Requires WebGL 2 for frame processing; falls back from GPU inference to CPU when WebGL remains available.
 
 ## Movements
 
@@ -31,6 +32,8 @@ KeeperCam is a browser goalkeeper game controlled by your body. Pose recognition
 | LOW / Нижний мяч | Hips lower relative to calibration and both wrists move below the hips |
 
 Movement thresholds are grouped in `src/config.ts`. Each meter uses a progress score; a move event requires the rule to remain true for 150 ms and releases below 60% progress.
+
+For troubleshooting, append `?delegate=cpu` to the local URL to select the CPU inference delegate directly (WebGL 2 is still required by MediaPipe’s video processing graph).
 
 ## Run locally
 
