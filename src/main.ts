@@ -403,7 +403,7 @@ function runFrame(generation:number): void {
     const rules=evaluateCoach(pose,features,coachPhase,target,activeMove);
     const hint=coach.update(rules,now);
     updateCoach(hint);
-    if(pre.phase==='flight'&&hint?.id.startsWith('T'))game.noteTechniqueError(hint.id);
+    if(pre.phase==='flight'&&hint?.id.startsWith('T')&&rules.some(rule=>rule.id===hint.id))game.noteTechniqueError(hint.id);
     if(tutorialIndex>=0&&tutorialIndex<5&&confirmed.includes(tutorialMoves[tutorialIndex].id))tutorialIndex++;
     if(tutorialIndex===5&&hint?.id==='T2')tutorialIndex=6;
     if(tutorialIndex===6&&confirmed.includes('HIGH'))tutorialIndex=7;

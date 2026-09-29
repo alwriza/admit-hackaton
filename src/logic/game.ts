@@ -24,7 +24,7 @@ export class GoalkeeperGame {
     if (this.readySince !== undefined) this.readySince += pausedFor;
     this.pausedAt = undefined;
   }
-  noteTechniqueError(id?: string): void { this.coachErrorId = id; }
+  noteTechniqueError(id?: string): void { if (id && this.state.phase === 'flight') this.coachErrorId ??= id; }
   tick(now: number, ready: boolean, confirmed: MoveId[] = []): GameSnapshot {
     if (this.pausedAt !== undefined) return this.state;
     const s = this.state;
@@ -60,10 +60,10 @@ export class GoalkeeperGame {
   private finishShot(now: number, saved: boolean, move?: MoveId): void {
     const s = this.state;
     const reactionMs = saved ? Math.max(0, now - s.phaseStarted) : null;
-    const clean = saved && s.zone === move && !this.coachErrorId;
+    const clean = saved && s.zone === move && !this.coachErrorId && !this.wrongMove;
     const result: ShotResult = {
       zone: s.zone!, result: clean ? 'clean' : saved ? 'saved_with_error' : 'goal', reactionMs,
-      errorId: clean ? null : !saved && this.wrongMove ? 'T5' : this.coachErrorId ?? null,
+      errorId: clean ? null : this.coachErrorId ?? (this.wrongMove ? 'T5' : null),
       points: clean ? 150 + Math.round(CONFIG.game.reactionBonus * (1 - (reactionMs ?? 0) / s.flightMs)) * (s.streak >= 2 ? 2 : 1) : saved ? 100 : 0,
     };
     const streak = clean ? s.streak + 1 : 0;
